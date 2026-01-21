@@ -2,10 +2,10 @@ Package: jvrlc
 Title: Analyse d'Images et ACP pour la Reconnaissance Faciale
 Version: 0.1.0
 Authors@R: 
-    person("Serigne", "MBAYE", , "serigne@example.com", role = c("aut", "cre"))
+    person("Serigne Saliou Bamba", "MBAYE", , "serigne@example.com", role = c("aut", "cre"))
 Description: Package R pour l'analyse d'images faciales, incluant des fonctions
     pour le chargement d'images, l'analyse en composantes principales (ACP),
-    et la visualisation des résultats.
+    la classification par k-NN, et la visualisation des résultats.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -14,10 +14,12 @@ Imports:
     stats,
     graphics,
     grDevices,
-    magick
+    magick,
+    FNN
 Suggests:
     testthat (>= 3.0.0),
     knitr,
-    rmarkdown
+    rmarkdown,
+    pixmap
 Config/testthat/edition: 3
 VignetteBuilder: knitr
