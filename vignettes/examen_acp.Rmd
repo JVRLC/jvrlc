@@ -1,0 +1,1144 @@
+---
+title: "Examen Dreyfuss - Reconnaissance Faciale par ACP"
+author: "Serigne Saliou Bamba MBAYE"
+date: "`r Sys.Date()`"
+output: html_document
+vignette: >
+  %\VignetteIndexEntry{Examen Dreyfuss - Reconnaissance Faciale par ACP}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# RAPPELS THÉORIQUES - Formules à connaître
+
+## 1. Analyse en Composantes Principales (ACP)
+
+### Matrice des données centrées
+Soit $X$ une matrice de données de dimension $n \times p$ (n individus, p variables).
+Le **centrage** consiste à soustraire la moyenne :
+
+$$\bar{x} = \frac{1}{n} \sum_{i=1}^{n} x_i$$
+
+$$Y = X - \mathbf{1}_n \bar{x}^T$$
+
+où $Y$ est la matrice centrée.
+
+### Matrice de covariance
+$$\Sigma = \frac{1}{n} Y^T Y$$
+
+### Équation aux valeurs propres
+L'ACP consiste à trouver les vecteurs propres de $\Sigma$ :
+
+$$\Sigma v_k = \lambda_k v_k$$
+
+où $\lambda_k$ est la k-ième valeur propre et $v_k$ le vecteur propre associé.
+
+### Astuce n << p (cas des images)
+Quand $n << p$ (peu d'images, beaucoup de pixels), on utilise l'astuce suivante :
+
+Au lieu de diagonaliser $Y^T Y$ (matrice $p \times p$ énorme), on diagonalise :
+
+$$M = Y Y^T \quad \text{(matrice } n \times n \text{ petite)}$$
+
+Si $u$ est vecteur propre de $M$ avec valeur propre $\lambda$ :
+$$M u = \lambda u$$
+
+Alors $v = Y^T u$ est vecteur propre de $\Sigma$ avec la même valeur propre :
+$$\Sigma v = \lambda v$$
+
+**Formule de passage :**
+$$v_k = \frac{1}{\sqrt{\lambda_k}} Y^T u_k$$
+
+(normalisation pour avoir $\|v_k\| = 1$)
+
+### Projection dans l'espace ACP
+Pour projeter une image $x$ (centrée) sur les $K$ premières composantes :
+
+$$c = x^T U_K$$
+
+où $U_K = [v_1, v_2, ..., v_K]$ est la matrice des K premiers vecteurs propres.
+
+### Variance expliquée
+La part de variance expliquée par les $K$ premières composantes :
+
+$$\text{Variance expliquée} = \frac{\sum_{k=1}^{K} \lambda_k}{\sum_{k=1}^{p} \lambda_k}$$
+
+## 2. Reconstruction d'image
+
+### Formule de reconstruction
+À partir des coordonnées $c$ dans l'espace ACP avec $K$ composantes :
+
+$$\hat{x} = \bar{x} + U_K \cdot c^T$$
+
+ou de façon équivalente :
+
+$$\hat{x} = \bar{x} + \sum_{k=1}^{K} c_k \cdot v_k$$
+
+Plus $K$ est grand, meilleure est la reconstruction.
+
+## 3. Classification par plus proche voisin (k-NN)
+
+### Distance euclidienne
+Dans l'espace ACP, la distance entre deux images $i$ et $j$ :
+
+$$d(i,j) = \|c_i - c_j\| = \sqrt{\sum_{k=1}^{K} (c_{i,k} - c_{j,k})^2}$$
+
+### Classification
+Pour une image test $x_{test}$ :
+
+1. Calculer ses coordonnées : $c_{test} = (x_{test} - \bar{x})^T U_K$
+2. Trouver le plus proche voisin : $i^* = \arg\min_i d(c_{test}, c_i)$
+3. Assigner le label du plus proche voisin
+
+## 4. Détection des inconnus
+
+### Statistiques intra-classe
+Pour chaque classe $k$, on calcule la distance au plus proche voisin **de même classe** :
+
+$$d_i^{intra} = \min_{j \neq i, y_j = y_i} d(c_i, c_j)$$
+
+### Moyenne et écart-type des distances intra-classe
+
+$$\mu = \frac{1}{n} \sum_{i=1}^{n} d_i^{intra}$$
+
+$$\sigma = \sqrt{\frac{1}{n-1} \sum_{i=1}^{n} (d_i^{intra} - \mu)^2}$$
+
+### Seuil de détection
+Un individu est considéré comme **INCONNU** si sa distance au plus proche voisin dépasse le seuil :
+
+$$\text{Seuil} = \mu + k \cdot \sigma$$
+
+Typiquement $k = 2$ (intervalle de confiance ~95% si normalité).
+
+### Règle de décision
+Pour une nouvelle image avec distance $d$ au plus proche voisin :
+
+$$\text{Décision} = \begin{cases} \text{CONNU} & \text{si } d \leq \mu + k\sigma \\ \text{INCONNU} & \text{si } d > \mu + k\sigma \end{cases}$$
+
+### Diamètre d'une classe
+Le diamètre est la **distance maximale** entre deux individus de même classe :
+
+$$\text{Diamètre}_k = \max_{i,j \in \text{classe } k} d(c_i, c_j)$$
+
+## 5. Métriques d'évaluation
+
+### Taux de reconnaissance
+$$\text{Accuracy} = \frac{\text{Nombre de bonnes classifications}}{\text{Nombre total de tests}}$$
+
+### Faux positifs (FP)
+Individu **INCONNU** classé comme **CONNU** :
+$$\text{Taux FP} = \frac{\text{Inconnus classés connus}}{\text{Nombre d'inconnus}}$$
+
+### Faux négatifs (FN)
+Individu **CONNU** classé comme **INCONNU** :
+$$\text{Taux FN} = \frac{\text{Connus classés inconnus}}{\text{Nombre de connus}}$$
+
+## 6. Test de normalité (Shapiro-Wilk)
+
+### Hypothèses
+- $H_0$ : Les données suivent une loi normale
+- $H_1$ : Les données ne suivent pas une loi normale
+
+### Interprétation
+- Si **p-value > 0.05** : On ne rejette pas $H_0$ → Normalité acceptable
+- Si **p-value < 0.05** : On rejette $H_0$ → Pas de normalité
+
+---
+
+# Introduction
+
+Ce document présente une analyse de **reconnaissance faciale** à l'aide de l'**ACP (eigenfaces)**.
+
+On travaille sur deux bases de données :
+
+1. **Base 1 (ORL)** : 400 images de 40 personnes (10 images par personne)
+2. **Base Yale** : 165 images de 15 personnes (11 images par personne)
+
+L'objectif est de :
+
+- Séparer les données en train/test avec des **individus inconnus**
+- Effectuer l'ACP sur le train
+- Calculer les statistiques intra-classe (distance au plus proche voisin)
+- Calculer le diamètre des classes
+- Tester l'hypothèse de normalité des distances
+- Évaluer la reconnaissance avec détection des inconnus
+- Comparer les performances (faux positifs, faux négatifs)
+
+---
+
+# PARTIE 1 : Base ORL (Base 1)
+
+## 1.1 Importation des données
+
+On crée une matrice de données où chaque ligne correspond à une image (112 x 92 = 10304 pixels).
+
+```{r eval=FALSE}
+library(pixmap)
+
+X <- matrix(data = NA, nrow = 400, ncol = 10304, byrow = TRUE)
+
+for (j in 1:40) {
+  for (i in 1:10) {
+    path = paste0("base1/s", toString(j))
+    fichiers <- list.files(path = path)
+    image <- read.pnm(file = paste0(path, "/", fichiers)[i])
+    vecteur_pixel <- as.vector(image@grey)
+    X[(j-1)*10+i,] <- vecteur_pixel
+  }
+}
+
+cat("Dimensions de la matrice X :", dim(X), "\n")
+cat("Nombre total d'images :", nrow(X), "\n")
+cat("Nombre de pixels par image :", ncol(X), "\n")
+```
+
+### Visualisation des 5 premiers visages
+
+```{r eval=FALSE}
+par(mfrow = c(1, 5), mar = c(1, 1, 2, 1))
+for (i in 1:5) {
+  img_matrix <- matrix(X[i, ], nrow = 112, ncol = 92, byrow = FALSE)
+  image(t(img_matrix[nrow(img_matrix):1, ]), col = grey(seq(0, 1, length = 256)),
+        axes = FALSE, main = paste("Sujet", ceiling(i/10), "- Image", i))
+}
+```
+
+**Commentaire :** On observe 5 visages de la base ORL. Les images sont en niveaux de gris avec une résolution de 112×92 pixels. Les sujets présentent des variations légères de pose et d'expression faciale.
+
+## 1.2 Labelisation des images
+
+On attribue un label (1 à 40) pour chaque individu.
+
+```{r eval=FALSE}
+labels = rep(1:40, each = 10)
+faces <- data.frame(labels, x = X)
+```
+
+## 1.3 Séparation Train/Test avec individus inconnus
+
+### Paramètres configurables
+
+```{r eval=FALSE}
+# ===== PARAMÈTRES À MODIFIER SELON LES BESOINS =====
+n_sujets_total <- 40        # Nombre total de sujets dans la base
+n_images_par_sujet <- 10    # Nombre d'images par sujet
+n_sujets_inconnus <- 4      # Nombre de sujets considérés comme inconnus
+n_images_test_par_sujet <- 2 # Nombre d'images par sujet connu pour le test
+# ===================================================
+```
+
+**Stratégie** :
+
+- Les **4 premières personnes** (labels 1 à 4) sont considérées comme **inconnues** (40 photos)
+- Pour les **36 personnes restantes**, on retire 2 photos par personne pour le test (72 photos)
+
+Ainsi :
+
+- **Train** : 288 photos (36 personnes connues × 8 images)
+- **Test** : 112 photos (40 inconnus + 72 connus)
+
+```{r eval=FALSE}
+set.seed(42)  # pour reproductibilité
+
+# Indices des images des sujets inconnus
+labels_inconnus <- 1:n_sujets_inconnus
+inconnus <- which(labels %in% labels_inconnus)
+
+# Pour les sujets connus, on prend n_images_test_par_sujet photos au hasard pour le test
+connus <- c()
+for (s in (n_sujets_inconnus + 1):n_sujets_total) {
+  idx_s <- which(labels == s)
+  connus <- c(connus, sample(idx_s, n_images_test_par_sujet, replace = FALSE))
+}
+
+indices <- c(inconnus, connus)
+ni <- length(indices)
+cat("Nombre d'images dans le test :", ni, "\n")
+
+# Séparation
+test_faces <- faces[indices, ]
+training_faces <- faces[-indices, ]
+
+# Les inconnus sont labélisés par 0
+j <- which(test_faces$labels %in% labels_inconnus)
+test_faces$labels[j] <- 0
+
+cat("Train :", nrow(training_faces), "images\n")
+cat("Test :", nrow(test_faces), "images\n")
+cat("  - Inconnus (label=0) :", sum(test_faces$labels == 0), "\n")
+cat("  - Connus :", sum(test_faces$labels != 0), "\n")
+```
+
+## 1.4 Préparation des matrices
+
+```{r eval=FALSE}
+# Labels train
+labels_train <- training_faces$labels
+
+# Matrice train (sans labels)
+training_faces_matrix <- as.matrix(training_faces[, -1])
+
+# Labels test (on garde 0 pour inconnus)
+labels_test <- test_faces$labels
+
+# Matrice test
+test_faces_matrix <- as.matrix(test_faces[, -1])
+```
+
+## 1.5 ACP sur l'ensemble d'entraînement
+
+```{r eval=FALSE}
+X_train <- training_faces_matrix
+n <- nrow(X_train)
+p <- ncol(X_train)
+
+# Visage moyen
+visage_moyen <- apply(X_train, 2, mean)
+
+# Centrage des données
+Y <- scale(X_train, center = TRUE, scale = FALSE)
+
+# Matrice de covariance (astuce : Y*Y' au lieu de Y'*Y car n << p)
+W <- (1/n) * Y %*% t(Y)
+
+# Décomposition en valeurs propres
+eig <- eigen(W)
+eigenvalues <- eig$values
+eigenvectors <- eig$vectors
+
+# Variance expliquée
+prop.var <- eigenvalues / sum(eigenvalues)
+cum.var <- cumsum(prop.var)
+
+# Nombre de composantes pour 95% de variance
+thres <- min(which(cum.var > 0.95))
+cat("Nombre de composantes pour 95% de variance :", thres, "\n")
+cat("Variance cumulée :", round(cum.var[thres] * 100, 2), "%\n")
+
+# Calcul des vrais vecteurs propres (eigenfaces)
+v <- t(Y) %*% eigenvectors
+
+# Normalisation
+v_norm <- apply(v, 2, function(x) x / sqrt(sum(x^2)))
+
+# On garde les thres premières composantes
+U <- v_norm[, 1:thres]
+```
+
+**Commentaire :** L'ACP permet de réduire la dimension de 10304 pixels à environ **100-150 composantes** tout en conservant 95% de la variance. C'est une réduction considérable qui facilite les calculs et élimine le bruit.
+
+### Visualisation du visage moyen
+
+```{r eval=FALSE}
+par(mar = c(1, 1, 2, 1))
+visage_moyen_mat <- matrix(visage_moyen, nrow = 112, ncol = 92, byrow = FALSE)
+image(t(visage_moyen_mat[nrow(visage_moyen_mat):1, ]), col = grey(seq(0, 1, length = 256)),
+      axes = FALSE, main = "Visage Moyen - Base ORL")
+```
+
+**Commentaire :** Le visage moyen représente la "moyenne" de tous les visages du jeu d'entraînement. Il capture les caractéristiques communes à tous les individus. L'ACP travaille sur les écarts par rapport à ce visage moyen.
+
+### Visualisation de la variance expliquée
+
+```{r eval=FALSE}
+plot(1:50, cum.var[1:50] * 100, type = "b", pch = 19, col = "blue",
+     xlab = "Nombre de composantes", ylab = "Variance cumulée (%)",
+     main = "Variance expliquée par les composantes principales - Base ORL")
+abline(h = 95, col = "red", lty = 2)
+legend("bottomright", legend = c("Variance cumulée", "Seuil 95%"),
+       col = c("blue", "red"), lty = c(1, 2), pch = c(19, NA))
+```
+
+**Commentaire :** La courbe de variance cumulée montre que les premières composantes capturent l'essentiel de l'information. Le seuil de 95% permet de garder suffisamment d'information pour une bonne reconnaissance tout en réduisant fortement la dimensionnalité.
+
+## 1.6 Projection des données train dans l'espace ACP
+
+```{r eval=FALSE}
+new_coords_train <- Y %*% U
+cat("Dimensions des coordonnées train :", dim(new_coords_train), "\n")
+```
+
+## 1.7 Reconstruction d'images
+
+La reconstruction d'une image consiste à projeter l'image dans l'espace réduit puis à la reconstruire en utilisant seulement les composantes principales retenues.
+
+**Formule de reconstruction :**
+$$\hat{x} = \bar{x} + U \cdot c$$
+
+où $\bar{x}$ est le visage moyen, $U$ la matrice des eigenfaces et $c$ les coordonnées dans l'espace réduit.
+
+```{r eval=FALSE}
+# Choisir quelques images à reconstruire
+indices_reconstruction <- c(1, 50, 100, 150, 200)
+
+par(mfrow = c(2, length(indices_reconstruction)), mar = c(1, 1, 2, 1))
+
+for (idx in indices_reconstruction) {
+  # Image originale (à partir de la matrice complète X)
+  img_originale <- X[idx, ]
+  img_mat <- matrix(img_originale, nrow = 112, ncol = 92, byrow = FALSE)
+  image(t(img_mat[nrow(img_mat):1, ]), col = grey(seq(0, 1, length = 256)),
+        axes = FALSE, main = paste("Original - Sujet", labels[idx]))
+}
+
+for (idx in indices_reconstruction) {
+  # Reconstruction : on centre, projette, puis reconstruit
+  img_centree <- X[idx, ] - visage_moyen
+  coords <- img_centree %*% U  # projection
+  img_reconstruite <- visage_moyen + coords %*% t(U)  # reconstruction
+  
+  img_mat <- matrix(img_reconstruite, nrow = 112, ncol = 92, byrow = FALSE)
+  image(t(img_mat[nrow(img_mat):1, ]), col = grey(seq(0, 1, length = 256)),
+        axes = FALSE, main = paste("Reconstruit (", thres, "CP)"))
+}
+```
+
+**Commentaire :** On observe que les images reconstruites avec les composantes principales sont très proches des originales. Cela confirme que l'ACP capture bien l'essentiel de l'information des visages. Les légères différences correspondent au "bruit" éliminé par la réduction de dimension.
+
+### Effet du nombre de composantes sur la reconstruction
+
+```{r eval=FALSE}
+# Reconstruire une image avec différents nombres de composantes
+idx_demo <- 1
+img_originale <- X[idx_demo, ]
+img_centree <- img_originale - visage_moyen
+
+n_composantes_test <- c(5, 10, 25, 50, 100, thres)
+n_composantes_test <- n_composantes_test[n_composantes_test <= thres]
+
+par(mfrow = c(1, length(n_composantes_test) + 1), mar = c(1, 1, 2, 1))
+
+# Original
+img_mat <- matrix(img_originale, nrow = 112, ncol = 92, byrow = FALSE)
+image(t(img_mat[nrow(img_mat):1, ]), col = grey(seq(0, 1, length = 256)),
+      axes = FALSE, main = "Original")
+
+for (n_cp in n_composantes_test) {
+  U_partiel <- v_norm[, 1:n_cp]
+  coords <- img_centree %*% U_partiel
+  img_reconstruite <- visage_moyen + coords %*% t(U_partiel)
+  
+  img_mat <- matrix(img_reconstruite, nrow = 112, ncol = 92, byrow = FALSE)
+  image(t(img_mat[nrow(img_mat):1, ]), col = grey(seq(0, 1, length = 256)),
+        axes = FALSE, main = paste(n_cp, "CP"))
+}
+```
+
+**Commentaire :** Cette visualisation montre l'effet du nombre de composantes principales sur la qualité de reconstruction :
+
+- Avec **5 CP** : on reconnaît vaguement un visage (forme générale)
+- Avec **25-50 CP** : les traits principaux apparaissent
+- Avec **100+ CP** : l'image est presque identique à l'originale
+
+Cela illustre comment les premières composantes capturent les structures globales (forme du visage) et les suivantes ajoutent les détails fins.
+
+## 1.8 Statistiques sur la base d'entraînement
+
+### a) Distance au plus proche voisin intra-classe
+
+Pour chaque image, on calcule la distance à son plus proche voisin de même classe.
+
+```{r eval=FALSE}
+d_intra <- numeric(n)
+
+for (i in 1:n) {
+  vect_courant <- new_coords_train[i, ]
+  label_courant <- labels_train[i]
+  
+  # Indices des autres images de même label
+  index <- which(labels_train == label_courant & seq_along(labels_train) != i)
+  
+  # Calcul des distances
+  n1 <- length(index)
+  M <- matrix(vect_courant, nrow = n1, ncol = thres, byrow = TRUE)
+  dist2 <- (new_coords_train[index, ] - M)^2
+  d_intra[i] <- min(sqrt(rowSums(dist2)))
+}
+
+mu <- mean(d_intra)
+sigma <- sd(d_intra)
+
+cat("Distance intra-classe moyenne (mu) :", round(mu, 4), "\n")
+cat("Écart-type (sigma) :", round(sigma, 4), "\n")
+```
+
+**Commentaire :** La distance intra-classe moyenne (mu) représente la distance typique entre deux images d'une même personne dans l'espace réduit. L'écart-type (sigma) mesure la variabilité de ces distances. Ces statistiques serviront à définir le seuil de détection des inconnus : si une image test est trop éloignée de son plus proche voisin (distance > mu + k*sigma), elle sera considérée comme inconnue.
+
+### b) Diamètre des classes
+
+Le diamètre d'une classe est la distance maximale entre deux images de cette classe.
+
+```{r eval=FALSE}
+n_classes_connues <- n_sujets_total - n_sujets_inconnus
+diametres <- numeric(n_classes_connues)
+classes_connues <- unique(labels_train)
+
+for (k in 1:length(classes_connues)) {
+  label_k <- classes_connues[k]
+  idx <- which(labels_train == label_k)
+  coords_k <- new_coords_train[idx, ]
+  
+  # Matrice des distances
+  dist_mat <- as.matrix(dist(coords_k))
+  diametres[k] <- max(dist_mat)
+}
+
+cat("Diamètre moyen des classes :", round(mean(diametres), 4), "\n")
+cat("Diamètre min :", round(min(diametres), 4), "\n")
+cat("Diamètre max :", round(max(diametres), 4), "\n")
+```
+
+**Commentaire :** Le diamètre d'une classe mesure l'étendue maximale des images d'un même individu. Un diamètre faible indique que les images d'une personne sont proches les unes des autres (bonne compacité). Un diamètre élevé peut indiquer des variations importantes (pose, éclairage, expression).
+
+```{r eval=FALSE}
+barplot(diametres, names.arg = classes_connues, col = "steelblue",
+        main = "Diamètre des classes - Base ORL",
+        xlab = "Classe", ylab = "Diamètre")
+abline(h = mean(diametres), col = "red", lty = 2)
+```
+
+### c) Test de normalité des distances
+
+On teste si les distances intra-classe suivent une loi normale (important pour justifier le seuil mu + k*sigma).
+
+```{r eval=FALSE}
+# Test de Shapiro-Wilk
+shapiro_test <- shapiro.test(d_intra)
+cat("Test de Shapiro-Wilk :\n")
+cat("  Statistique W :", shapiro_test$statistic, "\n")
+cat("  p-value :", shapiro_test$p.value, "\n")
+
+if (shapiro_test$p.value > 0.05) {
+  cat("  Conclusion : Les distances suivent une loi normale (p > 0.05)\n")
+} else {
+  cat("  Conclusion : Les distances NE suivent PAS une loi normale (p <= 0.05)\n")
+}
+```
+
+```{r eval=FALSE}
+# Histogramme des distances avec courbe normale
+hist(d_intra, breaks = 30, prob = TRUE, col = "lightblue",
+     main = "Distribution des distances intra-classe - Base ORL",
+     xlab = "Distance au plus proche voisin")
+curve(dnorm(x, mean = mu, sd = sigma), add = TRUE, col = "red", lwd = 2)
+legend("topright", legend = c("Données", "Loi normale"), 
+       fill = c("lightblue", NA), border = c("black", NA),
+       lty = c(NA, 1), col = c(NA, "red"), lwd = c(NA, 2))
+```
+
+**Commentaire sur le test de normalité :**
+
+- Si **p-value > 0.05** : On accepte l'hypothèse de normalité. L'utilisation du seuil mu + k*sigma est justifiée statistiquement.
+- Si **p-value < 0.05** : La distribution n'est pas normale. Le seuil mu + k*sigma reste une heuristique raisonnable mais n'a pas de justification théorique stricte.
+
+Dans le cas où la normalité est rejetée, on pourrait envisager d'autres approches comme les quantiles empiriques.
+
+## 1.9 Classification et reconnaissance
+
+### Projection des données test
+
+```{r eval=FALSE}
+library(FNN)
+
+# Centrage des données test avec le visage moyen du train
+test_centered <- test_faces_matrix - matrix(visage_moyen, nrow = ni, ncol = p, byrow = TRUE)
+
+# Projection
+new_coords_test <- test_centered %*% U
+```
+
+### Classification par plus proche voisin
+
+```{r eval=FALSE}
+# k-NN avec k=1 (plus proche voisin)
+pred <- get.knnx(data = new_coords_train, query = new_coords_test, k = 1)
+
+# Classe prédite = classe du plus proche voisin
+reconnaissance <- labels_train[pred$nn.index]
+
+# Distances au plus proche voisin
+distances <- pred$nn.dist
+```
+
+### Détection des inconnus avec différents seuils
+
+On teste plusieurs seuils : mu + sigma, mu + 1.5*sigma, mu + 2*sigma
+
+```{r eval=FALSE}
+seuils <- c(1, 1.5, 2, 2.5, 3)
+resultats <- data.frame()
+
+for (k_seuil in seuils) {
+  seuil <- mu + k_seuil * sigma
+  
+  # Prédictions avec détection des inconnus
+  pred_final <- reconnaissance
+  inc <- which(distances > seuil)
+  pred_final[inc] <- 0  # inconnus détectés
+  
+  # Calcul des métriques
+  # Vrais positifs inconnus : prédits inconnus ET vraiment inconnus
+  VP_inc <- sum(pred_final == 0 & labels_test == 0)
+  # Faux positifs : prédits inconnus mais vraiment connus
+  FP <- sum(pred_final == 0 & labels_test != 0)
+  # Faux négatifs : prédits connus mais vraiment inconnus
+  FN <- sum(pred_final != 0 & labels_test == 0)
+  # Vrais négatifs : prédits connus ET vraiment connus
+  VN <- sum(pred_final != 0 & labels_test != 0)
+  
+  # Taux
+  n_inconnus <- sum(labels_test == 0)
+  n_connus <- sum(labels_test != 0)
+  
+  taux_detection_inc <- VP_inc / n_inconnus * 100
+  taux_faux_positifs <- FP / n_connus * 100
+  taux_faux_negatifs <- FN / n_inconnus * 100
+  
+  # Précision de reconnaissance (parmi les connus bien classés comme connus)
+  idx_connus_detectes <- which(pred_final != 0 & labels_test != 0)
+  if (length(idx_connus_detectes) > 0) {
+    precision_reco <- mean(pred_final[idx_connus_detectes] == labels_test[idx_connus_detectes]) * 100
+  } else {
+    precision_reco <- NA
+  }
+  
+  resultats <- rbind(resultats, data.frame(
+    Seuil = paste0("mu + ", k_seuil, "*sigma"),
+    Valeur = round(seuil, 2),
+    Detection_Inconnus = round(taux_detection_inc, 1),
+    Faux_Positifs = round(taux_faux_positifs, 1),
+    Faux_Negatifs = round(taux_faux_negatifs, 1),
+    Precision_Reco = round(precision_reco, 1)
+  ))
+}
+
+knitr::kable(resultats, caption = "Performances selon le seuil - Base ORL")
+```
+
+**Interprétation des métriques :**
+
+- **Détection des inconnus** : Pourcentage d'individus inconnus correctement identifiés comme tels. Plus c'est élevé, mieux c'est.
+- **Faux positifs** : Pourcentage de connus rejetés à tort comme inconnus. On veut minimiser ce taux.
+- **Faux négatifs** : Pourcentage d'inconnus acceptés à tort comme connus. Dangereux en sécurité.
+- **Précision reconnaissance** : Parmi les connus acceptés, quel pourcentage est correctement identifié.
+
+**Compromis :** Un seuil bas (mu + sigma) détecte plus d'inconnus mais génère plus de faux positifs. Un seuil élevé (mu + 3*sigma) réduit les faux positifs mais laisse passer des inconnus.
+
+### Distribution des distances test
+
+```{r eval=FALSE}
+# Graphique des distances
+hist_connus <- distances[labels_test != 0]
+hist_inconnus <- distances[labels_test == 0]
+
+# Histogramme superposé
+hist(hist_inconnus, breaks = 20, col = rgb(1, 0, 0, 0.5), 
+     main = "Distribution des distances - Base ORL",
+     xlab = "Distance au plus proche voisin", xlim = range(distances))
+hist(hist_connus, breaks = 20, col = rgb(0, 0, 1, 0.5), add = TRUE)
+abline(v = mu + sigma, col = "green", lwd = 2, lty = 2)
+abline(v = mu + 2*sigma, col = "orange", lwd = 2, lty = 2)
+legend("topright", legend = c("Inconnus", "Connus", "mu+sigma", "mu+2*sigma"),
+       fill = c(rgb(1,0,0,0.5), rgb(0,0,1,0.5), NA, NA),
+       border = c("black", "black", NA, NA),
+       lty = c(NA, NA, 2, 2), col = c(NA, NA, "green", "orange"), lwd = c(NA, NA, 2, 2))
+```
+
+**Commentaire :** Ce graphique est crucial pour comprendre le fonctionnement de la détection. On observe que :
+
+- Les **inconnus** (rouge) ont généralement des distances plus élevées car ils ne ressemblent à personne dans la base d'entraînement.
+- Les **connus** (bleu) ont des distances plus faibles car leur plus proche voisin est souvent une autre image d'eux-mêmes.
+- Le choix du seuil détermine où l'on "coupe" : tout ce qui est à droite du seuil est classé comme inconnu.
+
+## 1.10 Fonction de test sur une nouvelle image
+
+Cette fonction permet de tester une nouvelle image pour déterminer si elle appartient à une personne connue ou inconnue.
+
+```{r eval=FALSE}
+# ===== FONCTION DE TEST SUR NOUVELLE IMAGE =====
+tester_nouvelle_image <- function(chemin_image, visage_moyen, U, new_coords_train, 
+                                   labels_train, mu, sigma, k_seuil = 2,
+                                   dim_img = c(112, 92)) {
+  
+  # Charger l'image
+  if (grepl("\\.pgm$", chemin_image, ignore.case = TRUE)) {
+    # Image PGM (base ORL)
+    img <- read.pnm(chemin_image)
+    vecteur <- as.vector(img@grey)
+  } else {
+    # Autre format (utiliser magick)
+    img <- image_read(chemin_image)
+    img <- image_resize(img, paste0(dim_img[2], "x", dim_img[1], "!"))
+    img <- image_convert(img, colorspace = "gray")
+    mat <- as.integer(image_data(img, channels = "gray"))
+    vecteur <- as.vector(mat) / 255  # normaliser entre 0 et 1
+  }
+  
+  # Centrer par rapport au visage moyen
+  img_centree <- vecteur - visage_moyen
+  
+  # Projeter dans l'espace ACP
+  coords <- img_centree %*% U
+  
+  # Trouver le plus proche voisin
+  pred <- get.knnx(data = new_coords_train, query = matrix(coords, nrow = 1), k = 1)
+  
+  distance <- pred$nn.dist[1]
+  idx_voisin <- pred$nn.index[1]
+  label_voisin <- labels_train[idx_voisin]
+  
+  # Seuil de détection
+  seuil <- mu + k_seuil * sigma
+  
+  # Décision
+  if (distance > seuil) {
+    decision <- "INCONNU"
+    label_predit <- 0
+  } else {
+    decision <- "CONNU"
+    label_predit <- label_voisin
+  }
+  
+  return(list(
+    decision = decision,
+    label_predit = label_predit,
+    distance = distance,
+    seuil = seuil,
+    marge = seuil - distance  # positif = connu, négatif = inconnu
+  ))
+}
+```
+
+### Comment utiliser pour une nouvelle image fournie par le prof
+
+```{r eval=FALSE}
+# ===== CODE À UTILISER POUR TESTER UNE NOUVELLE IMAGE =====
+
+# 1. Spécifier le chemin de l'image à tester
+chemin_nouvelle_image <- "chemin/vers/image_test.pgm"  # À MODIFIER
+
+# 2. Tester l'image
+resultat <- tester_nouvelle_image(
+  chemin_image = chemin_nouvelle_image,
+  visage_moyen = visage_moyen,
+  U = U,
+  new_coords_train = new_coords_train,
+  labels_train = labels_train,
+  mu = mu,
+  sigma = sigma,
+  k_seuil = 2  # Ajuster si nécessaire (1, 1.5, 2, 2.5, 3)
+)
+
+# 3. Afficher le résultat
+cat("=== RÉSULTAT DU TEST ===\n")
+cat("Décision :", resultat$decision, "\n")
+if (resultat$decision == "CONNU") {
+  cat("Identité prédite : Sujet", resultat$label_predit, "\n")
+}
+cat("Distance au plus proche voisin :", round(resultat$distance, 4), "\n")
+cat("Seuil utilisé :", round(resultat$seuil, 4), "\n")
+cat("Marge :", round(resultat$marge, 4), 
+    ifelse(resultat$marge > 0, "(bien classé)", "(rejeté)"), "\n")
+```
+
+---
+
+# PARTIE 2 : Base Yale
+
+## 2.1 Importation des données
+
+La base Yale contient 165 images GIF de 15 sujets (11 images par sujet).
+
+```{r eval=FALSE}
+library(magick)
+
+# Liste des fichiers
+fichiers_yale <- list.files("Yale A", pattern = "^subject", full.names = TRUE)
+fichiers_yale <- fichiers_yale[!grepl("Readme", fichiers_yale)]
+
+# Dimensions cibles (on redimensionne toutes les images à la même taille)
+largeur_cible <- 100
+hauteur_cible <- 100
+n_pixels_yale <- largeur_cible * hauteur_cible
+
+cat("Dimensions cibles :", largeur_cible, "x", hauteur_cible, "\n")
+cat("Nombre de pixels :", n_pixels_yale, "\n")
+
+# Créer la matrice
+n_images_yale <- length(fichiers_yale)
+X_yale <- matrix(NA, nrow = n_images_yale, ncol = n_pixels_yale)
+
+# Extraire les labels
+noms <- basename(fichiers_yale)
+labels_yale <- as.numeric(gsub("subject([0-9]+)\\..*", "\\1", noms))
+
+# Charger toutes les images (avec redimensionnement)
+for (i in 1:n_images_yale) {
+  img <- image_read(fichiers_yale[i])
+  img <- image_resize(img, paste0(largeur_cible, "x", hauteur_cible, "!"))
+  img <- image_convert(img, colorspace = "gray")
+  mat <- as.integer(image_data(img, channels = "gray"))
+  X_yale[i, ] <- as.vector(mat)
+}
+
+cat("Matrice Yale :", dim(X_yale), "\n")
+cat("Nombre de sujets :", length(unique(labels_yale)), "\n")
+```
+
+**Commentaire :** La base Yale présente des conditions plus variées que la base ORL : différentes expressions faciales (happy, sad, surprised), conditions d'éclairage (left-light, right-light, center-light), et port de lunettes. Cela rend la reconnaissance plus difficile.
+
+## 2.2 Séparation Train/Test avec individus inconnus
+
+```{r eval=FALSE}
+# ===== PARAMÈTRES À MODIFIER SELON LES BESOINS =====
+n_sujets_total_yale <- length(unique(labels_yale))  # Nombre total de sujets (15)
+n_images_par_sujet_yale <- as.numeric(table(labels_yale)[1])  # Images par sujet (11)
+n_sujets_inconnus_yale <- 3       # Nombre de sujets considérés comme inconnus
+n_images_test_par_sujet_yale <- 3  # Nombre d'images par sujet connu pour le test
+# ===================================================
+
+set.seed(42)
+
+faces_yale <- data.frame(labels = labels_yale, x = X_yale)
+
+# Sujets inconnus (les n_sujets_inconnus_yale premiers)
+labels_inconnus_yale <- 1:n_sujets_inconnus_yale
+inconnus_yale <- which(labels_yale %in% labels_inconnus_yale)
+
+# Pour les sujets connus, prendre n_images_test_par_sujet_yale photos au hasard pour le test
+connus_yale <- c()
+for (s in (n_sujets_inconnus_yale + 1):n_sujets_total_yale) {
+  idx_s <- which(labels_yale == s)
+  connus_yale <- c(connus_yale, sample(idx_s, n_images_test_par_sujet_yale, replace = FALSE))
+}
+
+indices_yale <- c(inconnus_yale, connus_yale)
+ni_yale <- length(indices_yale)
+
+# Séparation
+test_faces_yale <- faces_yale[indices_yale, ]
+training_faces_yale <- faces_yale[-indices_yale, ]
+
+# Labéliser les inconnus par 0
+test_faces_yale$labels[test_faces_yale$labels %in% labels_inconnus_yale] <- 0
+
+cat("Train Yale :", nrow(training_faces_yale), "images\n")
+cat("Test Yale :", nrow(test_faces_yale), "images\n")
+```
+
+## 2.3 ACP sur le train Yale
+
+```{r eval=FALSE}
+labels_train_yale <- training_faces_yale$labels
+training_matrix_yale <- as.matrix(training_faces_yale[, -1])
+labels_test_yale <- test_faces_yale$labels
+test_matrix_yale <- as.matrix(test_faces_yale[, -1])
+
+n_yale <- nrow(training_matrix_yale)
+p_yale <- ncol(training_matrix_yale)
+
+# Visage moyen
+visage_moyen_yale <- apply(training_matrix_yale, 2, mean)
+
+# Centrage
+Y_yale <- scale(training_matrix_yale, center = TRUE, scale = FALSE)
+
+# Matrice de covariance
+W_yale <- (1/n_yale) * Y_yale %*% t(Y_yale)
+
+# Décomposition
+eig_yale <- eigen(W_yale)
+eigenvalues_yale <- eig_yale$values
+eigenvectors_yale <- eig_yale$vectors
+
+# Variance expliquée
+prop.var_yale <- eigenvalues_yale / sum(eigenvalues_yale)
+cum.var_yale <- cumsum(prop.var_yale)
+
+thres_yale <- min(which(cum.var_yale > 0.95))
+cat("Composantes pour 95% variance :", thres_yale, "\n")
+
+# Eigenfaces
+v_yale <- t(Y_yale) %*% eigenvectors_yale
+v_norm_yale <- apply(v_yale, 2, function(x) x / sqrt(sum(x^2)))
+U_yale <- v_norm_yale[, 1:thres_yale]
+```
+
+## 2.4 Statistiques et classification Yale
+
+```{r eval=FALSE}
+new_coords_train_yale <- Y_yale %*% U_yale
+
+# Distance intra-classe
+d_intra_yale <- numeric(n_yale)
+
+for (i in 1:n_yale) {
+  vect_courant <- new_coords_train_yale[i, ]
+  label_courant <- labels_train_yale[i]
+  index <- which(labels_train_yale == label_courant & seq_along(labels_train_yale) != i)
+  
+  n1 <- length(index)
+  M <- matrix(vect_courant, nrow = n1, ncol = thres_yale, byrow = TRUE)
+  dist2 <- (new_coords_train_yale[index, ] - M)^2
+  d_intra_yale[i] <- min(sqrt(rowSums(dist2)))
+}
+
+mu_yale <- mean(d_intra_yale)
+sigma_yale <- sd(d_intra_yale)
+
+cat("Distance intra-classe moyenne (mu) :", round(mu_yale, 4), "\n")
+cat("Écart-type (sigma) :", round(sigma_yale, 4), "\n")
+```
+
+## 2.5 Diamètre des classes Yale
+
+```{r eval=FALSE}
+classes_connues_yale <- unique(labels_train_yale)
+diametres_yale <- numeric(length(classes_connues_yale))
+
+for (k in 1:length(classes_connues_yale)) {
+  label_k <- classes_connues_yale[k]
+  idx <- which(labels_train_yale == label_k)
+  coords_k <- new_coords_train_yale[idx, ]
+  dist_mat <- as.matrix(dist(coords_k))
+  diametres_yale[k] <- max(dist_mat)
+}
+
+cat("Diamètre moyen :", round(mean(diametres_yale), 4), "\n")
+```
+
+## 2.6 Test de normalité - Yale
+
+```{r eval=FALSE}
+shapiro_yale <- shapiro.test(d_intra_yale)
+cat("Test de Shapiro-Wilk (Yale) :\n")
+cat("  p-value :", shapiro_yale$p.value, "\n")
+```
+
+## 2.7 Classification Yale
+
+```{r eval=FALSE}
+# Projection test
+test_centered_yale <- test_matrix_yale - matrix(visage_moyen_yale, nrow = ni_yale, ncol = p_yale, byrow = TRUE)
+new_coords_test_yale <- test_centered_yale %*% U_yale
+
+# k-NN
+pred_yale <- get.knnx(data = new_coords_train_yale, query = new_coords_test_yale, k = 1)
+reconnaissance_yale <- labels_train_yale[pred_yale$nn.index]
+distances_yale <- pred_yale$nn.dist
+
+# Résultats pour différents seuils
+resultats_yale <- data.frame()
+
+for (k_seuil in seuils) {
+  seuil <- mu_yale + k_seuil * sigma_yale
+  
+  pred_final <- reconnaissance_yale
+  inc <- which(distances_yale > seuil)
+  pred_final[inc] <- 0
+  
+  VP_inc <- sum(pred_final == 0 & labels_test_yale == 0)
+  FP <- sum(pred_final == 0 & labels_test_yale != 0)
+  FN <- sum(pred_final != 0 & labels_test_yale == 0)
+  
+  n_inc <- sum(labels_test_yale == 0)
+  n_con <- sum(labels_test_yale != 0)
+  
+  taux_det <- VP_inc / n_inc * 100
+  taux_fp <- FP / n_con * 100
+  taux_fn <- FN / n_inc * 100
+  
+  idx_ok <- which(pred_final != 0 & labels_test_yale != 0)
+  prec_reco <- if(length(idx_ok) > 0) mean(pred_final[idx_ok] == labels_test_yale[idx_ok]) * 100 else NA
+  
+  resultats_yale <- rbind(resultats_yale, data.frame(
+    Seuil = paste0("mu + ", k_seuil, "*sigma"),
+    Valeur = round(seuil, 2),
+    Detection_Inconnus = round(taux_det, 1),
+    Faux_Positifs = round(taux_fp, 1),
+    Faux_Negatifs = round(taux_fn, 1),
+    Precision_Reco = round(prec_reco, 1)
+  ))
+}
+
+knitr::kable(resultats_yale, caption = "Performances selon le seuil - Base Yale")
+```
+
+---
+
+# QUESTIONS PROBABLES À L'EXAMEN - Reconnaissance Faciale par ACP
+
+## Questions théoriques sur l'ACP
+
+### 1. Qu'est-ce que l'ACP ?
+Méthode de réduction de dimension qui transforme des variables corrélées en composantes non corrélées (orthogonales), ordonnées par variance décroissante.
+
+### 2. Pourquoi centrer les données avant l'ACP ?
+Pour que la première composante capture la variance et non la moyenne des données.
+
+### 3. Que représentent les valeurs propres ?
+La variance expliquée par chaque composante principale.
+
+### 4. Que représentent les vecteurs propres ?
+Les directions de variance maximale (les "eigenfaces" dans notre cas).
+
+### 5. Pourquoi utilise-t-on l'astuce YY' au lieu de Y'Y ?
+Quand n << p (ex: 400 images de 10304 pixels), YY' est de taille n×n (petite) au lieu de p×p (énorme). C'est beaucoup plus rapide à diagonaliser.
+
+**Formule de passage :** v_k = (1/√λ_k) × Y' × u_k
+
+### 6. Comment choisir le nombre de composantes K ?
+- En regardant la variance cumulée expliquée (ex: garder 95% de la variance)
+- Par validation croisée sur les performances de classification
+- En analysant le "coude" du scree plot
+
+### 7. Qu'est-ce qu'un eigenface ?
+C'est un vecteur propre de la matrice de covariance des visages, représentant un "visage de base". Toute image peut être reconstruite comme combinaison linéaire d'eigenfaces.
+
+---
+
+## Questions sur la reconnaissance faciale
+
+### 8. Expliquer le principe de la reconnaissance faciale par ACP
+1. Projeter chaque visage dans l'espace des eigenfaces
+2. Pour identifier un nouveau visage, le projeter et trouver le plus proche voisin dans l'ensemble d'entraînement
+
+### 9. Comment calculer la distance entre deux visages ?
+Distance euclidienne dans l'espace ACP : 
+```
+d = √(Σ (c₁ₖ - c₂ₖ)²)
+```
+
+### 10. Comment reconstruire une image à partir de ses composantes ?
+```
+x̂ = x̄ + Σ cₖ × vₖ
+```
+(visage moyen + combinaison linéaire des eigenfaces)
+
+---
+
+## Questions sur la détection d'inconnus
+
+### 11. Comment détecter si une personne est inconnue ?
+- Calculer la distance au plus proche voisin
+- Si distance > seuil (μ + k×σ), la personne est inconnue
+
+### 12. Qu'est-ce que la distance intra-classe ?
+Distance entre un individu et son plus proche voisin **de même classe**.
+
+### 13. Pourquoi utilise-t-on μ + 2σ comme seuil ?
+- Sous hypothèse de normalité, ~95% des distances intra-classe sont sous μ + 2σ
+- Au-delà, on considère que c'est statistiquement improbable → inconnu
+
+### 14. Qu'est-ce que le diamètre d'une classe ?
+La distance maximale entre deux individus de la même classe. Mesure la "dispersion" ou l'étendue de la classe.
+
+### 15. Pourquoi tester la normalité des distances ?
+Pour valider l'utilisation du seuil μ + k×σ qui suppose une distribution normale.
+
+---
+
+## Questions sur l'évaluation
+
+### 16. Qu'est-ce qu'un faux positif (FP) dans ce contexte ?
+Un individu **INCONNU** classé comme **CONNU** (erreur de sécurité !)
+
+### 17. Qu'est-ce qu'un faux négatif (FN) ?
+Un individu **CONNU** classé comme **INCONNU** (erreur de commodité)
+
+### 18. Quel type d'erreur est le plus grave ?
+Dépend du contexte :
+- **Sécurité (banque)** : FP grave → on laisse entrer un intrus
+- **Confort utilisateur** : FN grave → utilisateur légitime rejeté
+
+### 19. Comment améliorer les performances ?
+- Augmenter le nombre d'images par personne
+- Ajuster le nombre de composantes K
+- Ajuster le seuil k (compromis FP/FN)
+- Utiliser d'autres métriques de distance
+
+---
+
+## Questions pratiques (code R)
+
+### 20. Comment charger une image PGM en R ?
+```r
+library(pixmap)
+img <- read.pnm("image.pgm")
+vecteur <- as.vector(img@grey)
+```
+
+### 21. Comment calculer les vecteurs propres en R ?
+```r
+M <- Y %*% t(Y)  # Matrice n x n
+decomp <- eigen(M)
+valeurs_propres <- decomp$values
+vecteurs_propres <- decomp$vectors
+U <- t(Y) %*% vecteurs_propres  # Passage aux eigenfaces
+```
+
+### 22. Comment faire une classification k-NN en R ?
+```r
+library(FNN)
+pred <- get.knnx(data = train_coords, query = test_coords, k = 1)
+labels_predits <- labels_train[pred$nn.index]
+distances <- pred$nn.dist
+```
+
+### 23. Comment tester la normalité en R ?
+```r
+shapiro.test(distances)
+# p-value > 0.05 → normalité OK
+```
+
+---
+
+## Questions de compréhension
+
+### 24. Pourquoi séparer en train/test avec des sujets entièrement inconnus ?
+Pour simuler un scénario réaliste où des personnes non enregistrées essaient d'accéder au système.
+
+### 25. Quelle est la différence entre reconnaissance et identification ?
+- **Reconnaissance** : Vérifier si une personne est dans la base (CONNU/INCONNU)
+- **Identification** : Déterminer QUI est la personne parmi les connus
+
+### 26. Pourquoi les premières eigenfaces ressemblent à des visages et les dernières à du bruit ?
+- Les premières capturent les variations principales (forme du visage, éclairage)
+- Les dernières capturent le bruit et les détails fins
+
+### 27. Quel est l'impact du nombre de composantes sur la reconstruction ?
+- **Peu de composantes** → image floue (grandes structures seulement)
+- **Beaucoup de composantes** → image nette (détails fins)
+
+---
+
+## FORMULES ESSENTIELLES À RETENIR
+
+| Concept | Formule |
+|---------|---------|
+| Centrage | Y = X - 1ₙ × x̄ᵀ |
+| Covariance | Σ = (1/n) × Yᵀ × Y |
+| Astuce n << p | Diagonaliser M = Y × Yᵀ au lieu de Yᵀ × Y |
+| Passage vecteur propre | vₖ = (1/√λₖ) × Yᵀ × uₖ |
+| Projection | c = xᵀ × Uₖ |
+| Reconstruction | x̂ = x̄ + Uₖ × cᵀ |
+| Variance expliquée | Σλₖ / Σλᵢ |
+| Distance euclidienne | d = √(Σ(c₁ₖ - c₂ₖ)²) |
+| Seuil détection | μ + k×σ |
+| Diamètre classe | max d(i,j) pour i,j même classe |
+
+---
+
+## CHECKLIST AVANT L'EXAMEN
+
+- [ ] Savoir expliquer l'ACP en 2 phrases
+- [ ] Connaître l'astuce n << p et pourquoi on l'utilise
+- [ ] Savoir reconstruire une image
+- [ ] Comprendre le seuil μ + kσ
+- [ ] Distinguer FP et FN et leur importance
+- [ ] Savoir interpréter un test de Shapiro-Wilk
+- [ ] Connaître les fonctions R clés : eigen(), get.knnx(), shapiro.test()
